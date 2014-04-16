@@ -104,7 +104,7 @@ void TeleopPS3Car::joyCallback(const sensor_msgs::Joy::ConstPtr& joy)
 	if(vel.linear.x < 0){
 		vel.angular.z *= -1;
 	}
-	if(last_angular != vel.angular.z && last_linear != vel.linear.x)
+	if(last_angular != 0 && last_linear != 0)
 		vel_pub_.publish(vel);
     last_angular =  vel.angular.z;
     last_linear = vel.linear.x;
