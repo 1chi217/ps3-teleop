@@ -60,6 +60,7 @@ private:
     ros::ServiceClient disable, enable, trackOn, trackOff;
     bool run, car_like, track;
     double turning_radius, quot;
+    double last_linear, last_angular;
 
 };
 
@@ -71,6 +72,8 @@ TeleopPS3Car::TeleopPS3Car()
     car_like = false;
     track = false;
     turning_radius = 1;
+    last_angular = 0;
+    last_linear = 0;
 
     nh_.param("axis_linear", linear_, linear_);
     nh_.param("axis_angular", angular_, angular_);
@@ -95,55 +98,16 @@ void TeleopPS3Car::joyCallback(const sensor_msgs::Joy::ConstPtr& joy)
 {
     geometry_msgs::Twist vel;
 
-    // Car-like steering
-    if(car_like){
 
-        vel.linear.x = -l_scale_*joy->axes[PS3_AXIS_BUTTON_REAR_RIGHT_2];
-        // Backwards?
-        if(joy->buttons[PS3_BUTTON_ACTION_SQUARE]){
-            vel.linear.x *= -1;
-        }
-        // Do we have a velocity?
-        if(fabs(vel.linear.x) > 0){
-            vel.angular.z = a_scale_*joy->axes[PS3_AXIS_STICK_LEFT_LEFTWARDS];
-            // Backwards?
-            if(joy->buttons[PS3_BUTTON_ACTION_SQUARE]){
-                vel.angular.z *= -1;
-            }
-        }
-
-        // Do we have a vaild turning radius
-        if(vel.angular.z/vel.linear.x > quot){
-            vel.angular.z = quot * vel.linear.x;
-        } else if (vel.angular.z/vel.linear.x < -quot){
-            vel.angular.z = -quot * vel.linear.x;
-        }
-
-        if(joy->buttons[PS3_BUTTON_CROSS_UP]){
-            ROS_INFO("Differential Drive Mode");
-            car_like = false;
-        } else {
-            vel_pub_.publish(vel);
-        }
-
-        ROS_INFO("%f [rad/m]", vel.angular.z/vel.linear.x);
-
-    }
-    // Differential drive steering
-      else {
-        vel.linear.x = l_scale_*joy->axes[linear_];
-        vel.angular.z = a_scale_*joy->axes[angular_];
-        if(vel.linear.x < 0){
-            vel.angular.z *= -1;
-        }
-
-        if(joy->buttons[PS3_BUTTON_CROSS_DOWN]){
-            ROS_INFO("Car-like Drive Mode");
-            car_like = true;
-        } else {
-            vel_pub_.publish(vel);
-        }
-    }
+	vel.linear.x = l_scale_*joy->axes[linear_];
+	vel.angular.z = a_scale_*joy->axes[angular_];
+	if(vel.linear.x < 0){
+		vel.angular.z *= -1;
+	}
+	if(last_angular != vel.angular.z && last_linear != vel.linear.x)
+		vel_pub_.publish(vel);
+    last_angular =  vel.angular.z;
+    last_linear = vel.linear.x;
 
 
     if(joy->buttons[PS3_BUTTON_ACTION_CROSS] && run){
