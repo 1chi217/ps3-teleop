@@ -57,9 +57,9 @@ private:
     double l_scale_, a_scale_;
     ros::Publisher vel_pub_;
     ros::Subscriber joy_sub_;
-    ros::ServiceClient disable, enable;
-    bool run, car_like;
-    double turning_radius;
+    ros::ServiceClient disable, enable, trackOn, trackOff;
+    bool run, car_like, track;
+    double turning_radius, quot;
 
 };
 
@@ -69,6 +69,7 @@ TeleopPS3Car::TeleopPS3Car()
     // Default settings
     run = true;
     car_like = false;
+    track = false;
     turning_radius = 1;
 
     nh_.param("axis_linear", linear_, linear_);
@@ -78,11 +79,15 @@ TeleopPS3Car::TeleopPS3Car()
     nh_.param("car_like", car_like, car_like);
     nh_.param("turning_radius", turning_radius, turning_radius);
 
+    quot = 1./(2*turning_radius);
+
     vel_pub_ = nh_.advertise<geometry_msgs::Twist>("/ps3/cmd_vel", 1);
     joy_sub_ = nh_.subscribe<sensor_msgs::Joy>("joy", 10, &TeleopPS3Car::joyCallback, this);
 
     disable = nh_.serviceClient<std_srvs::Empty>("/ps3/disable_motors");
     enable = nh_.serviceClient<std_srvs::Empty>("/ps3/enable_motors");
+    trackOn = nh_.serviceClient<std_srvs::Empty>("/tracking/start_tracking");
+    trackOff = nh_.serviceClient<std_srvs::Empty>("/tracking/stop_tracking");
 
 }
 
@@ -108,10 +113,10 @@ void TeleopPS3Car::joyCallback(const sensor_msgs::Joy::ConstPtr& joy)
         }
 
         // Do we have a vaild turning radius
-        if(vel.angular.z/vel.linear.x > turning_radius){
-            vel.angular.z = turning_radius * vel.linear.x;
-        } else if (vel.angular.z/vel.linear.x < -turning_radius){
-            vel.angular.z = -turning_radius * vel.linear.x;
+        if(vel.angular.z/vel.linear.x > quot){
+            vel.angular.z = quot * vel.linear.x;
+        } else if (vel.angular.z/vel.linear.x < -quot){
+            vel.angular.z = -quot * vel.linear.x;
         }
 
         if(joy->buttons[PS3_BUTTON_CROSS_UP]){
@@ -120,6 +125,8 @@ void TeleopPS3Car::joyCallback(const sensor_msgs::Joy::ConstPtr& joy)
         } else {
             vel_pub_.publish(vel);
         }
+
+        ROS_INFO("%f [rad/m]", vel.angular.z/vel.linear.x);
 
     }
     // Differential drive steering
@@ -144,11 +151,24 @@ void TeleopPS3Car::joyCallback(const sensor_msgs::Joy::ConstPtr& joy)
         std_srvs::Empty srv;
         disable.call(srv);
         ROS_WARN("Emergency Stop!");
+        trackOff.call(srv);
+        ROS_WARN("Tracking off!");
+        track = false;
     } else if (joy->buttons[PS3_BUTTON_ACTION_CIRCLE] && !run) {
         run = !run;
         std_srvs::Empty srv;
         enable.call(srv);
         ROS_INFO("Motors on");
+    } else if (joy->buttons[PS3_BUTTON_ACTION_TRIANGLE] && run && !track) {
+    	track = !track;
+        std_srvs::Empty srv;
+        trackOn.call(srv);
+        ROS_INFO("Tracking on");
+    } else if (joy->buttons[PS3_BUTTON_ACTION_SQUARE] && run && track) {
+    	track = !track;
+        std_srvs::Empty srv;
+        trackOff.call(srv);
+        ROS_INFO("Tracking off");
     }
 
 
